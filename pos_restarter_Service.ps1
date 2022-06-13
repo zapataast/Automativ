@@ -1,6 +1,5 @@
 #New-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name '6.0retail---' -Value 'D:\IBI\WILDFLY\posrestarter.bat' -PropertyType "String"
 
-
 #------------------------ LOG DELETER -----------------------------------------
 $ecr = 'D:\IBI\WILDFLY\welcome-content\DBIS Files\POS\ECRTerminalLog'
 $soc = 'D:\IBI\WILDFLY\welcome-content\DBIS Files\POS\SocialPayLog'
@@ -12,10 +11,28 @@ $saveday = 21;
 'lower -lt     '
 $SqlServer    = "192.168.0.25" # SQL Server instance (HostName\InstanceName for named instance)
 $Database     = "msdb"      # SQL database to connect to 
+$DatabasePos  = "Sansar171RetailPOS"   
+$ComputerN    =  HOSTNAME.EXE;  
 $SqlAuthLogin = "sa"          # SQL Authentication login
 $SqlAuthPass  = "SpawnGG"     # SQL Authentication login password
-$dargiin_odor = 1;
+$logoutputpath = "D:\IBI\WILDFLy\querytest.xml" ; $logoutputpath1 = "D:\IBI\WILDFLy\deleting_log.txt" ;$logoutputpath2 = "D:\IBI\WILDFLy\shrink.txt"
+$dargiin_check = "D:\IBI\WILDFLY\standalone\log\Backup_" + $current_date.ToString("yyyyMMdd") + ".bak";
 $ipaddress = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $(Get-NetConnectionProfile | Select-Object -ExpandProperty InterfaceIndex) | Select-Object -ExpandProperty IPAddress
+#-------------------------Сарын сүүлийн 1 дэxь өдөрийг олоx 
+$current_date = Get-Date;
+$last_day = [DateTime]::DaysInMonth($current_date.Year, $current_date.Month)
+$last_day_date = $current_date.AddDays($last_day-$current_date.Day)
+for ($i = 1; $i -lt 8; $i++) {
+    Write-Output $last_day_date.DayOfWeek;
+
+    if($last_day_date.DayOfWeek -eq 'Monday'){
+        $dargiin_odor = $last_day_date.Day;
+        break;
+    }
+    $last_day_date = $last_day_date.AddDays(-1);
+}
+Write-Output $dargiin_odor;
+$dargiin_odor = 14
 #===------------------- ECR LOG delete -----------------------------------------
 
 $today_date = Get-Date
@@ -92,12 +109,26 @@ Remove-Item $g5 -Recurse -Force
 Remove-Item $g6 -Recurse -Force
 Remove-Item $g7 -Recurse -Force
 #----------------------------- RESTART ZONE ---------------------------------------#
-
+$Query_pos_backup = "DECLARE @STR varchar(35) = '" + $DatabasePos + "';
+DECLARE @str2 varchar(100) = Concat('N',@STR,'-Full Database Backup');
+DECLARE @FileName varchar(1000)
+SELECT @FileName = (SELECT 'D:\IBI\WILDFLY\standalone\log\Backup_' + convert(varchar(500), GetDate(),112) + '.bak')
+Backup Database @STR To disk = @FileName with noformat, noinit, name = @str2, SKIP, NOREWIND, NOUNLOAD, STATS = 10";
 $Query = "SELECT run_status
 FROM [msdb].[dbo].[sysjobhistory] 
-WHERE step_name = '10.17.1.5'
+WHERE step_name = '"+ $ipaddress + "'
 and convert(varchar, getdate(), 112) = run_date" #convert(varchar, getdate(), 112)
-
+$Query_shrink_db = "USE ["+ $DatabasePos + "]
+DBCC SHRINKDATABASE(N'" + $DatabasePos + "' )
+USE [" + $DatabasePos + "] 
+DBCC SHRINKFILE (N'" + $DatabasePos + "_Data' , 255)"
+$deleting_day = $current_date.AddDays(-$current_date.Day);
+$deleting_day = $deleting_day.ToString("yyyyMMdd")
+$Query_pos_delete = "DELETE FROM " + $DatabasePos + ".dbo.BillDtl WHERE BillDate <= '" + $deleting_day + "';
+                     DELETE FROM " + $DatabasePos + ".dbo.Billhdr WHERE BillDate <= '" + $deleting_day + "';
+                     DELETE FROM " + $DatabasePos + ".dbo.logbillaction WHERE CreatedDate <= '" + $deleting_day + "';
+                     DELETE FROM " + $DatabasePos + ".dbo.logvatps WHERE CreatedDate <= '" + $deleting_day + "';
+                     DELETE FROM " + $DatabasePos + ".dbo.logvatpsarchive WHERE CreatedDate <= '" + $deleting_day + "';"; 
 while(1 -eq 1){
     $current_date = Get-Date;
     #if($current_date.Hour -eq 6 -and $current_date.Minute -eq 59){
@@ -115,10 +146,10 @@ while(1 -eq 1){
         $sqlcmd = New-Object System.Data.SqlClient.SqlCommand
         $sqlcmd.Connection = $conn
         $sqlcmd.CommandText = $query
-        $adp = New-Object System.Data.SqlClient.SqlDataAdapter $sqlcmd
+        $adp = New-Object System.Data.SqlClient.SqlDataAdapter $sqlcmd 
         $data = New-Object System.Data.DataSet
         $adp.Fill($data) | Out-Null
-        $data.Tables | format-table
+        $data.Tables | format-table | Out-File -filePath $logoutputpath 
         $conn.Close()
         if($data.Tables.run_status -eq $null){
             Write-Output "null bna"
@@ -129,7 +160,44 @@ while(1 -eq 1){
             }
         }
     }  
-    Start-Sleep -Seconds 100
+    $bool1 = Test-Path -Path $dargiin_check -PathType Leaf #BACKUP awsan vgvig шалгаж байна
+    if($dargiin_odor -eq $current_date.Day -and $bool1 -eq 0){ #backup авсан үгүй болон даргын өдөр зэрэг таарч байгаа үгүйг шалгаж байна. 
+        #----------------------BACKUP ZONE -------------------------------------------------------------------------------- 
+        $connString = "Data Source=$ComputerN;Database=$DatabasePos;User ID=$SqlAuthLogin;Password=$SqlAuthPass"
+        $conn = New-Object System.Data.SqlClient.SqlConnection $connString
+        $conn.Open()
+        $sqlcmd = $conn.CreateCommand()
+        $sqlcmd = New-Object System.Data.SqlClient.SqlCommand
+        $sqlcmd.Connection = $conn
+        $sqlcmd.CommandText = $Query_pos_backup
+        $adp = New-Object System.Data.SqlClient.SqlDataAdapter $sqlcmd
+        $data = New-Object System.Data.DataSet
+        $adp.Fill($data) | Out-Null
+        $data.Tables | format-table
+        Start-Sleep -Seconds 10
+        #------------------- DELETING ZONE ---------------------------------------------------------------------------
+        $sqlcmd = $conn.CreateCommand()
+        $sqlcmd = New-Object System.Data.SqlClient.SqlCommand
+        $sqlcmd.Connection = $conn
+        $sqlcmd.CommandText = $Query_pos_delete
+        $adp = New-Object System.Data.SqlClient.SqlDataAdapter $sqlcmd
+        $data = New-Object System.Data.DataSet
+        $adp.Fill($data) | Out-Null
+        $data.Tables | format-table | Out-File -filePath $logoutputpath1 
+        Start-Sleep -Seconds 10
+        #------------------- SHRINKE FILE ZONE ---------------------------------------------------------------------
+        $sqlcmd = $conn.CreateCommand()
+        $sqlcmd = New-Object System.Data.SqlClient.SqlCommand
+        $sqlcmd.Connection = $conn
+        $sqlcmd.CommandText = $Query_shrink_db
+        $adp = New-Object System.Data.SqlClient.SqlDataAdapter $sqlcmd
+        $data = New-Object System.Data.DataSet
+        $adp.Fill($data) | Out-Null
+        $data.Tables | format-table | Out-File -filePath $logoutputpath2 
+        Start-Sleep -Seconds 10
+        $conn.Close()    
+    }
+    Start-Sleep -Seconds 75
 	stop-service DoSvc
 	stop-service wuauserv
 }
