@@ -1,25 +1,24 @@
 #New-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name '6.0retail---' -Value 'D:\IBI\WILDFLY\posrestarter.bat' -PropertyType "String"
-
 #------------------------ LOG DELETER -----------------------------------------
 $ecr = 'D:\IBI\WILDFLY\welcome-content\DBIS Files\POS\ECRTerminalLog'
 $soc = 'D:\IBI\WILDFLY\welcome-content\DBIS Files\POS\SocialPayLog'
 $log = 'D:\IBI\WILDFLY\standalone\log'
 $saveday = 21;
-'not equal -ne '
-'-equal -eq    '
-'greater -qt   '
-'lower -lt     '
+#'not equal -ne !=''-equal -eq  ==''greater -qt  >''lower -lt <     '
+$current_date = Get-Date;
 $SqlServer    = "192.168.0.25" # SQL Server instance (HostName\InstanceName for named instance)
 $Database     = "msdb"      # SQL database to connect to 
-$DatabasePos  = "Sansar171RetailPOS"   
+$DatabasePos  = "Sansar172RetailPOS"   
 $ComputerN    =  HOSTNAME.EXE;  
 $SqlAuthLogin = "sa"          # SQL Authentication login
 $SqlAuthPass  = "SpawnGG"     # SQL Authentication login password
+$default_printer = Get-WMIObject -Query " SELECT * FROM Win32_Printer WHERE Default=$true"
+$printername = $default_printer.name
+$printerjobs = Get-PrintJob -PrinterName $printername
 $logoutputpath = "D:\IBI\WILDFLy\querytest.xml" ; $logoutputpath1 = "D:\IBI\WILDFLy\deleting_log.txt" ;$logoutputpath2 = "D:\IBI\WILDFLy\shrink.txt"
 $dargiin_check = "D:\IBI\WILDFLY\standalone\log\Backup_" + $current_date.ToString("yyyyMMdd") + ".bak";
 $ipaddress = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $(Get-NetConnectionProfile | Select-Object -ExpandProperty InterfaceIndex) | Select-Object -ExpandProperty IPAddress
 #-------------------------Сарын сүүлийн 1 дэxь өдөрийг олоx 
-$current_date = Get-Date;
 $last_day = [DateTime]::DaysInMonth($current_date.Year, $current_date.Month)
 $last_day_date = $current_date.AddDays($last_day-$current_date.Day)
 for ($i = 1; $i -lt 8; $i++) {
@@ -32,7 +31,6 @@ for ($i = 1; $i -lt 8; $i++) {
     $last_day_date = $last_day_date.AddDays(-1);
 }
 Write-Output $dargiin_odor;
-$dargiin_odor = 14
 #===------------------- ECR LOG delete -----------------------------------------
 
 $today_date = Get-Date
@@ -129,12 +127,13 @@ $Query_pos_delete = "DELETE FROM " + $DatabasePos + ".dbo.BillDtl WHERE BillDate
                      DELETE FROM " + $DatabasePos + ".dbo.logbillaction WHERE CreatedDate <= '" + $deleting_day + "';
                      DELETE FROM " + $DatabasePos + ".dbo.logvatps WHERE CreatedDate <= '" + $deleting_day + "';
                      DELETE FROM " + $DatabasePos + ".dbo.logvatpsarchive WHERE CreatedDate <= '" + $deleting_day + "';"; 
+ 
 while(1 -eq 1){
     $current_date = Get-Date;
-    #if($current_date.Hour -eq 6 -and $current_date.Minute -eq 59){
-        #Write-Output "yes"
-        #Stop-Computer -Force
-        #Restart-Computer -Force}
+    if($current_date.Hour -eq 4){
+        Write-Output "yes"
+        Stop-Computer -Force
+    }
     if($current_date.Hour -lt 7){
         Write-Output 'Noxtsol biyelej bna'
         $connString = "Data Source=$SqlServer;Database=$Database;User ID=$SqlAuthLogin;Password=$SqlAuthPass"
@@ -160,6 +159,7 @@ while(1 -eq 1){
             }
         }
     }  
+    #LOCAL SQL query WORKING ZONE >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     $bool1 = Test-Path -Path $dargiin_check -PathType Leaf #BACKUP awsan vgvig шалгаж байна
     if($dargiin_odor -eq $current_date.Day -and $bool1 -eq 0){ #backup авсан үгүй болон даргын өдөр зэрэг таарч байгаа үгүйг шалгаж байна. 
         #----------------------BACKUP ZONE -------------------------------------------------------------------------------- 
@@ -197,7 +197,16 @@ while(1 -eq 1){
         Start-Sleep -Seconds 10
         $conn.Close()    
     }
-    Start-Sleep -Seconds 75
+    # PRINTER QUEUE RESTART ZONE >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    $printerjobs = Get-PrintJob -PrinterName $printername
+    if($printerjobs.Length -gt 3){
+        Write-Output 'bna'
+        Restart-PrintJob -PrinterName $printername -ID 3
+        Restart-PrintJob -PrinterName $printername -ID 1
+        Restart-PrintJob -PrinterName $printername -ID 2
+        Restart-PrintJob -PrinterName $printername -ID 4
+    }
+    Start-Sleep -Seconds 7
 	stop-service DoSvc
 	stop-service wuauserv
 }
