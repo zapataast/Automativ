@@ -78,14 +78,36 @@ sudo systemctl restart cups
 apt install git 
 git clone https://github.com/zapataast/ubuntupos.git
 cd ubuntupos/
-unzip sewoocupsinstall_203dpi_amd64.zip 
-unzip unzip goconnection.zip  
-unzip touch.zip 
+#unzip sewoocupsinstall_203dpi_amd64.zip 
+#unzip unzip goconnection.zip  
+#unzip touch.zip 
 cd sewoocupsinstall_203dpi_amd64/
 chmod +x setup.sh
 ./setup.sh
-
-
+cd ..
+adduser it dialout
+chmod +x goconnection
+./goconnection install
+./goconnection start
+cd ..
+wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb
+dpkg -i packages-microsoft-prod.deb
+apt update
+y | apt install apt-transport-https
+y | apt install dotnet-sdk-2.1 -y
+cd opt/
+wget http://192.168.0.44/dc64web.tar.gz
+tar -xzvf dc64web.tar.gz
+rm dc64web.tar.gz
+cd dc64web/WebApplication1/
+rm 'WebApplication1 - Backup.csproj'
+dotnet build
+cd bin/Debug/netcoreapp2.1/
+sudo sed -i "s/<PORT>.*<\/PORT>/<PORT>\/dev\/ttyACM0<\/PORT>/g" DualConnector.xml 
+cp -f /home/it/ubuntupos/dc64web.service /etc/systemd/system/
+systemctl daemon-reload 
+systemctl enable dc64web # already exist 
+systemctl start dc6web 
 
 
 
